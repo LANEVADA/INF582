@@ -24,9 +24,20 @@ def clean_text(text):
     text = re.sub(r"[\「\(\[\{\（\【\《][^\w\u4e00-\u9fa5]*[\)\]\}\）\】\」\》]", "", text)  # 移除包含无效字符的括号
     
     return text
+def truncate_text(text, max_length=2000):
+    if len(text) <= max_length:
+        return text
+    
+    truncated = text[:max_length]
+    last_punctuation = max(truncated.rfind("。"), truncated.rfind("！"), truncated.rfind("？"))
+    
+    if last_punctuation != -1:
+        return truncated[:last_punctuation + 1]  # 保留到最后一个标点符号
+    else:
+        return truncated  # 若无标点，则直接截断
 
 # 数据提取与清理
-def extract_data(data_path, output_path, len_doc):
+def extract_data(data_path, output_path, len_doc,batch=1):
     all_texts = set()  # 使用 set 存储去重的文本
     count = 0
 
@@ -53,9 +64,9 @@ def extract_data(data_path, output_path, len_doc):
                 for section in sections:
                     section = BeautifulSoup(section, "html.parser").get_text().strip()
                     section = clean_text(section)
-
+                    section = truncate_text(section)
                     # 过滤短文本、非中文文本和去重
-                    if len(section) >= 200 and is_mostly_chinese(section) and section not in all_texts:
+                    if len(section) >= 1000 and is_mostly_chinese(section) and section not in all_texts:
                         all_texts.add(section)
                         count += 1
                         print(f"\r已处理 {count} 条文本,共{len_doc}条文本", end="")
@@ -72,6 +83,10 @@ def extract_data(data_path, output_path, len_doc):
     df = pd.DataFrame({"text": list(all_texts)})
     df=df.dropna()
     num_data=df.shape[0]
+    num_per_batch=num_data//batch
+    for i in range(batch):
+        df[i*num_per_batch:(i+1)*num_per_batch].to_csv(output_path+"_"+str(i)+".csv", index=False, encoding="utf-8")
+        print(f"已处理 {num_per_batch} 条有效文本，并存储到 {output_path}_{i}")
     df.to_csv(output_path, index=False, encoding="utf-8")
     print(f"已处理 {num_data} 条有效文本，并存储到 {output_path}")
 
@@ -83,5 +98,5 @@ def extract_data(data_path, output_path, len_doc):
 
 if __name__ == "__main__":
     data_folder = "output_wiki_texts"  # 替换为你的数据目录
-    output_file = "data/output_dir/cleaned_filtered.csv"
-    extract_data(data_folder, output_file, 6000)
+    output_file = "data/output_dir/cleaned_filtered_extracted"
+    extract_data(data_folder,output_file, 12000,batch=30)
